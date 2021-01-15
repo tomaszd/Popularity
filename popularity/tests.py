@@ -42,12 +42,16 @@ class AuthorizationSmokeTest(TestCase):
         self.user = User.objects.create_user('test', 'test@email.com', 'testtest')
         self.client.force_login(self.user)
 
-    def test_repos_not_available_for_anonymous(self):
+    def test_repos_available_for_authenticated(self):
         response = self.client.get('/api/v1/repos/', follow=True)
         self.assertEqual(response.status_code, 200)
 
-    def test_single_repo_not_available_for_anonymous(self):
+    def test_single_repo_available_for_authenticated(self):
         response = self.client.get(f'/api/v1/repos/{self.test_id}/', follow=True)
+        self.assertEqual(response.status_code, 200)
+
+    def test_single_repo_popular_statusavailable_for_authenticated(self):
+        response = self.client.get(f'/api/v1/repos/{self.test_id}/popular/', follow=True)
         self.assertEqual(response.status_code, 200)
 
 

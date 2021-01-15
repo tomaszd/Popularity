@@ -6,4 +6,10 @@ from popularity.models import Repo
 class RepoSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Repo
-        fields = ['created', 'name', 'popular', 'url']
+        fields = ['created', 'name', 'github_url', 'url']
+
+
+class RepoSerializerDetail(serializers.HyperlinkedModelSerializer):
+    class Meta:
+        model = Repo
+        fields = ['created', 'name', 'github_url', 'url']

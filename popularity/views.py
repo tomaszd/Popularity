@@ -19,7 +19,8 @@ class RepoViewSet(viewsets.ModelViewSet):
     @action(detail=True)
     def popular(self, request, *args, **kwargs):
         repo = self.get_object()
-        return Response(repo.popular_status)
+        status, info = repo.popular_status
+        return Response(info, status)
 
     def get_serializer_class(self):
         if self.action == 'list':

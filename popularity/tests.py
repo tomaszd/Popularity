@@ -5,6 +5,9 @@ from djoser.urls.base import User
 
 from popularity import views
 from popularity.models import Repo
+from rest_framework import status
+
+from popularity.utils import calculate_popularity, POPULAR_REPO_RESULT, NOT_POPULAR_REPO_RESULT
 
 
 class SmokeTests(TestCase):
@@ -26,11 +29,15 @@ class SmokeTests(TestCase):
 
     def test_repos_not_available_for_anonymous(self):
         response = self.client.get('/api/v1/repos/', follow=True)
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_single_repo_not_available_for_anonymous(self):
         response = self.client.get('/api/v1/repos/1/', follow=True)
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_single_repo_popular_status_for_non_authenticated(self):
+        response = self.client.get(f'/api/v1/repos/1/popular/', follow=True)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class AuthorizationSmokeTest(TestCase):
@@ -44,15 +51,15 @@ class AuthorizationSmokeTest(TestCase):
 
     def test_repos_available_for_authenticated(self):
         response = self.client.get('/api/v1/repos/', follow=True)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_single_repo_available_for_authenticated(self):
         response = self.client.get(f'/api/v1/repos/{self.test_id}/', follow=True)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_single_repo_popular_statusavailable_for_authenticated(self):
+    def test_single_repo_popular_status_available_for_authenticated(self):
         response = self.client.get(f'/api/v1/repos/{self.test_id}/popular/', follow=True)
-        self.assertEqual(response.status_code, 200)
+        self.assertNotEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class DocumentationTest(TestCase):
@@ -60,16 +67,34 @@ class DocumentationTest(TestCase):
 
     def test_schema_json_available(self):
         response = self.client.get(reverse('schema-json', kwargs={'format': '.json'}), follow=True)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_schema_yaml_available(self):
         response = self.client.get(reverse('schema-json', kwargs={'format': '.yaml'}), follow=True)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_schema_swagger_ui_available(self):
         response = self.client.get(reverse('schema-swagger-ui'), follow=True)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_schema_redoc_available(self):
         response = self.client.get(reverse('schema-redoc'), follow=True)
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class PopularityCheckerTest(TestCase):
+    """Check if calculate popularity fuinction returns proper results for different amount of stars, forks"""
+
+    def test_check_score_positive_cases(self):
+        self.assertEquals(calculate_popularity(stars=500, forks=0), POPULAR_REPO_RESULT)
+        self.assertEquals(calculate_popularity(stars=0, forks=250), POPULAR_REPO_RESULT)
+        self.assertEquals(calculate_popularity(stars=498, forks=1), POPULAR_REPO_RESULT)
+        self.assertEquals(calculate_popularity(stars=100, forks=200), POPULAR_REPO_RESULT)
+        self.assertEquals(calculate_popularity(stars=400, forks=50), POPULAR_REPO_RESULT)
+
+    def test_check_score_negative_cases(self):
+        self.assertEquals(calculate_popularity(stars=499, forks=0), NOT_POPULAR_REPO_RESULT)
+        self.assertEquals(calculate_popularity(stars=0, forks=249), NOT_POPULAR_REPO_RESULT)
+        self.assertEquals(calculate_popularity(stars=497, forks=1), NOT_POPULAR_REPO_RESULT)
+        self.assertEquals(calculate_popularity(stars=99, forks=200), NOT_POPULAR_REPO_RESULT)
+        self.assertEquals(calculate_popularity(stars=0, forks=0), NOT_POPULAR_REPO_RESULT)

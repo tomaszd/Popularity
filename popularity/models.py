@@ -1,6 +1,6 @@
-import time
-
 from django.db import models
+
+from popularity.utils import get_github_api_response
 
 
 class Repo(models.Model):
@@ -12,18 +12,14 @@ class Repo(models.Model):
 
     @property
     def popular_status(self):
-        return f"Here would be info about repo popularity  {self.get_github_api_response()}"
+        return get_github_api_response(repo_name=self.name)
 
     @property
     def github_url(self):
         return f"https://github.com/{self.name}/"
 
-    def get_github_api_response(self):
-        # @Todo add proper obtaining of repo popularity. use Github Rest api
-        # This would be a time consuming function
-        time.sleep(1)
-        return "todo Popular/ not popular"
-
     def save(self, *args, **kwargs):
-        self.name = self.name.lstrip("https://github.com").lstrip("http://github.com").rstrip("/")
+        self.name = self.name.replace("https://github.com", ''). \
+            replace("http://github.com", ''). \
+            rstrip("/").lstrip("/")
         super(Repo, self).save(*args, **kwargs)

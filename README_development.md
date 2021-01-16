@@ -1,9 +1,19 @@
 # Development tricks
+### local development
 Python 3.7.2
 + pip install -r requirements.txt
 + python manage.py makemigrations
 + python manage.py migrate
 + python manage.py runserver 8000
++ tests: python manage.py test
+to utilize the github token please do : export PERSONAL_ACCESS_TOKEN=<your token> before python manage.py runserver 8000
+
+### local docker development
+///to use PERSONAL ACCES TOKEN please put it into .env_file
++ docker-compose up
++ docker-compose run web python manage.py createsuperuser
++ docker-compose run web python manage.py test
+
 
 ### Basic auth checks:
 ##### Register a new user:
@@ -17,9 +27,8 @@ Python 3.7.2
 {"email": "", "username": "djoser", "id": 1}
 
 #### Use swagger:
++ login in /admin as earlier prepared admin
 + navigate to /doc/
-+ use django login button
-+ login as an admin
 + use the swagger UI
 
 #### Personal Access Token
@@ -27,7 +36,11 @@ Python 3.7.2
 + Follow the instructions to obtain Personal Access Token to fasten up the development
 + export PERSONAL_ACCESS_TOKEN=<your_personal_access_token>
 + *Github Api gives 5000/h limit for accesing the GitHubApi*
+
 #### Simple usage of popularity Api:
+Be sure the PERSONAL_ACCESS_TOKEN is available as an env variable on running machine
+export PERSONAL_ACCESS_TOKEN=<your token>  - for local development
+add <your token>  to .env_file             - for docker development
 + Login as an admin
 + navigate to http://127.0.0.1:8000/api/v1/repos/ post new repo name :
 e.g. https://github.com/facebook/react/ has millions of stars and forks

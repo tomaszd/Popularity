@@ -9,10 +9,11 @@ Python 3.7.2
 to utilize the github token please do : export PERSONAL_ACCESS_TOKEN=<your token> before python manage.py runserver 8000
 
 ### local docker development
-///to use PERSONAL ACCES TOKEN please put it into .env_file
+///to use PERSONAL ACCESS TOKEN please put it into .env_file
 + docker-compose up
-+ docker-compose run web python manage.py createsuperuser
 + docker-compose run web python manage.py test
++ docker-compose run web python manage.py createsuperuser
+
 
 
 ### Basic auth checks:
@@ -35,7 +36,7 @@ to utilize the github token please do : export PERSONAL_ACCESS_TOKEN=<your token
 + https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token
 + Follow the instructions to obtain Personal Access Token to fasten up the development
 + export PERSONAL_ACCESS_TOKEN=<your_personal_access_token>
-+ *Github Api gives 5000/h limit for accesing the GitHubApi*
++ *Github Api gives 5000 hits/h limit for accessing the GitHubApi*
 
 #### Simple usage of popularity Api:
 Be sure the PERSONAL_ACCESS_TOKEN is available as an env variable on running machine

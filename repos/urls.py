@@ -26,7 +26,7 @@ schema_view = get_schema_view(
         title="Popularity API",
         default_version='v1',
         description="Documentation for Popular Github repos API",
-        license=openapi.License(name="License name for Guithub Repo Popular API"),
+        license=openapi.License(name="License name for Github Repo Popular API"),
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),

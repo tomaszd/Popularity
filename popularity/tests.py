@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import TestCase
 # Create your tests here.
 from django.urls import resolve, reverse
@@ -9,38 +11,56 @@ from popularity.models import Repo
 from popularity.utils import calculate_popularity, POPULAR_REPO_RESULT, NOT_POPULAR_REPO_RESULT
 
 
+class MockRequestsToGithubPopularRepo:
+    def __init__(self):
+        self.status_code = 200
+
+    def json(self):
+        return {
+            "stargazers_count": 500,
+            "forks": 200
+        }
+
+
+class MockRequestsToGithubNotPopularRepo:
+    def __init__(self):
+        self.status_code = 200
+
+    def json(self):
+        return {
+            "stargazers_count": 499,
+            "forks": 0
+        }
+
+
 class SmokeTests(TestCase):
-    """Test Repo models , urls smoke test"""
+    """Test Repo models, urls smoke test"""
 
     def setUp(self):
         self.repo1 = Repo.objects.create(name='repo1_name')
         self.repo2 = Repo.objects.create(name='repo2_name')
 
     def test_check_if_view_repos_have_good_class(self):
-        found = resolve('/api/v1/repos/')
+        found = resolve(reverse('repo-list'))
         self.assertEquals(found.func.cls, views.RepoViewSet)
 
     def test_check_if_view_single_repo_has_good_class(self):
-        found = resolve('/api/v1/repos/1/')
+        found = resolve(reverse('repo-detail', kwargs={'pk': 1}))
         self.assertEquals(found.func.cls, views.RepoViewSet)
-        found = resolve('/api/v1/repos/2/')
+        found = resolve(reverse('repo-detail', kwargs={'pk': 2}))
         self.assertEquals(found.func.cls, views.RepoViewSet)
 
     def test_repos_not_available_for_anonymous(self):
-        response = self.client.get('/api/v1/repos/', follow=True)
+        response = self.client.get(reverse('repo-list'), follow=True)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_single_repo_not_available_for_anonymous(self):
-        response = self.client.get('/api/v1/repos/1/', follow=True)
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    def test_single_repo_popular_status_for_non_authenticated(self):
-        response = self.client.get(f'/api/v1/repos/1/popular/', follow=True)
+        response = self.client.get(reverse('repo-detail', kwargs={'pk': 1}), follow=True)
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
 
 class SingleRepoTest(TestCase):
-    """Test Addition of new repos , details about single repo"""
+    """Test Addition of new repos, details about single repo"""
 
     def setUp(self):
         self.user = User.objects.create_user('test', 'test@email.com', 'testtest')
@@ -50,63 +70,114 @@ class SingleRepoTest(TestCase):
         initial_count = Repo.objects.count()
         repo_name = "facebook/react"
         self.assertFalse(Repo.objects.filter(name=repo_name))
-        response = self.client.post('/api/v1/repos/', data={"name": repo_name})
+        response = self.client.post(reverse('repo-list'), data={"name": repo_name})
         self.assertEquals(response.status_code, status.HTTP_201_CREATED)
         self.assertEquals(Repo.objects.count(), initial_count + 1)
         self.assertTrue(Repo.objects.get(name=repo_name))
 
     def test_check_uniqueness_of_repo_name(self):
         repo_name = "test_user/test_name"
-        response = self.client.post('/api/v1/repos/', data={"name": repo_name})
+        response = self.client.post(reverse('repo-list'), data={"name": repo_name})
         self.assertEquals(response.status_code, status.HTTP_201_CREATED)
-        response = self.client.post('/api/v1/repos/', data={"name": repo_name})
+        response = self.client.post(reverse('repo-list'), data={"name": repo_name})
         self.assertEquals(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_single_repo_fields(self):
         repo_name = "test_user/test_name"
-        response = self.client.post('/api/v1/repos/', data={"name": repo_name})
+        response = self.client.post(reverse('repo-list'), data={"name": repo_name})
         test_id = response.json()['id']
-        response = self.client.get(f'/api/v1/repos/{test_id}/')
+        response = self.client.get(reverse('repo-detail', kwargs={'pk': test_id}))
         response_json = response.json()
         test_id = response_json.get('id')
         self.assertEquals(response_json.get('name'), repo_name)
         self.assertEquals(response_json.get('github_url'), f'https://github.com/{repo_name}/')
-        self.assertEquals(response_json.get('url'), f'http://testserver/api/v1/repos/{test_id}/')
+        self.assertEquals(response_json.get('url'),
+                          ''.join(['http://testserver', reverse('repo-detail', kwargs={'pk': test_id})]))
         self.assertIn('created', response_json)
+        self.assertNotEquals(response_json.get('created'), '')
 
-    def test_single_repo_popularity(self):
+    @patch("os.environ.get", return_value="")
+    def test_single_repo_popularity_token_not_granted(self, mocked):
         """Test popularity when token not granted on server"""
-        repo_name = "test_user/test_name"
-        response = self.client.post('/api/v1/repos/', data={"name": repo_name})
+        repo_name = "test_user/test_name11"
+        response = self.client.post(reverse('repo-list'), data={"name": repo_name})
         test_id = response.json()['id']
         response = self.client.get(f'/api/v1/repos/{test_id}/popular/')
         self.assertEquals(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
+    @patch("os.environ.get", return_value="test_personal_access_token_in_env")
+    @patch("requests.get", return_value=MockRequestsToGithubPopularRepo())
+    def test_single_repo_popularity_valid_response_from_github_popular(self, mocked_env, mocked_requests):
+        """Test popularity when token granted on server and github api responsible. Check popular repo."""
+        response = self.call_github_rest_api_for_popularity()
+        self.assertEquals(response.json(), 'popular')
+
+    @patch("os.environ.get", return_value="test_personal_access_token_in_env")
+    @patch("requests.get", return_value=MockRequestsToGithubNotPopularRepo())
+    def test_single_repo_popularity_valid_response_from_github_not_popular(self, mocked_env, mocked_requests):
+        """Test popularity when token granted on server and github api responsible. Check not popular repo."""
+        response = self.call_github_rest_api_for_popularity()
+        self.assertEquals(response.json(), 'not popular')
+
+    def call_github_rest_api_for_popularity(self):
+        repo_name = "test_user/test_name2"
+        response = self.client.post(reverse('repo-list'), data={"name": repo_name})
+        test_id = response.json()['id']
+        response = self.client.get(f'/api/v1/repos/{test_id}/popular/')
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
+        return response
+
 
 class RepoListTest(TestCase):
-    """Test Addition of new repos , details about single repo"""
+    """Test Addition of new repos, details about single repo"""
+    repo_list_url = reverse('repo-list')
 
     def setUp(self):
         self.user = User.objects.create_user('test', 'test@email.com', 'testtest')
         self.client.force_login(self.user)
 
-    def test_check_pagination(self):
+    def test_pagination_visible(self):
         repo_name = "test_user/test_name"
         initial_count = Repo.objects.count()
         amount_of_new_repo = 100
-        repo_list_url = '/api/v1/repos/'
+
         for i in range(amount_of_new_repo):
-            self.client.post(f'{repo_list_url}', data={"name": f"{repo_name}{i}"})
+            self.client.post(f'{self.repo_list_url}', data={"name": f"{repo_name}{i}"})
         actual_count = initial_count + amount_of_new_repo
         self.assertEquals(actual_count, initial_count + amount_of_new_repo)
-        response_json = self.client.get(repo_list_url).json()
+        response_json = self.client.get(self.repo_list_url).json()
         self.assertEquals(response_json.get('count'), actual_count)
-        self.assertEquals(response_json.get('next'), f'http://testserver{repo_list_url}?page=2')
+        self.assertEquals(response_json.get('next'), f'http://testserver{self.repo_list_url}?page=2')
         self.assertEquals(response_json.get('previous'), None)
-        response_next_page_json = self.client.get(f'http://testserver{repo_list_url}?page=2').json()
+        response_next_page_json = self.client.get(f'http://testserver{self.repo_list_url}?page=2').json()
         self.assertEquals(response_next_page_json.get('count'), actual_count)
-        self.assertEquals(response_next_page_json.get('previous'), f'http://testserver{repo_list_url}')
-        self.assertEquals(response_next_page_json.get('next'), f'http://testserver{repo_list_url}?page=3')
+        self.assertEquals(response_next_page_json.get('previous'), f'http://testserver{self.repo_list_url}')
+        self.assertEquals(response_next_page_json.get('next'), f'http://testserver{self.repo_list_url}?page=3')
+
+    def test_check_name_addition(self):
+        repo_name = "test_user/test_name"
+        response = self.client.post(f'{self.repo_list_url}', data={"name": f"{repo_name}"}).json()
+        self.assertEquals(response.get('name'), repo_name)
+
+    def test_check_name_addition_lstrip(self):
+        repo_name = "/user/name"
+        response = self.client.post(f'{self.repo_list_url}', data={"name": f"{repo_name}"}).json()
+        self.assertEquals(response.get('name'), repo_name.lstrip('/'))
+
+    def test_check_name_addition_lstrip_multiple(self):
+        repo_name = "/////user/name"
+        response = self.client.post(f'{self.repo_list_url}', data={"name": f"{repo_name}"}).json()
+        self.assertEquals(response.get('name'), repo_name.lstrip('/'))
+
+    def test_check_name_addition_github_https_replace(self):
+        repo_name = "https://github.com/user/name"
+        response = self.client.post(f'{self.repo_list_url}', data={"name": f"{repo_name}"}).json()
+        self.assertEquals(response.get('name'), repo_name.replace('https://github.com/', ''))
+
+    def test_check_name_addition_github_http_replace(self):
+        repo_name = "http://github.com/user/name"
+        response = self.client.post(f'{self.repo_list_url}', data={"name": f"{repo_name}"}).json()
+        self.assertEquals(response.get('name'), repo_name.replace('http://github.com/', ''))
 
 
 class AuthorizationSmokeTest(TestCase):
@@ -119,16 +190,16 @@ class AuthorizationSmokeTest(TestCase):
         self.client.force_login(self.user)
 
     def test_repos_available_for_authenticated(self):
-        response = self.client.get('/api/v1/repos/', follow=True)
+        response = self.client.get(reverse('repo-list'), follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_single_repo_available_for_authenticated(self):
-        response = self.client.get(f'/api/v1/repos/{self.test_id}/', follow=True)
+        response = self.client.get(reverse('repo-detail', kwargs={'pk': self.test_id}), follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_single_repo_popular_status_available_for_authenticated(self):
+    def test_single_repo_popular_status_available_url(self):
         response = self.client.get(f'/api/v1/repos/{self.test_id}/popular/', follow=True)
-        self.assertNotEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class DocumentationTest(TestCase):
@@ -176,6 +247,13 @@ class HealthCheckTest(TestCase):
         found = resolve('/health_check/')
         self.assertEquals(found.func.view_class, views.HealthCheckView)
 
-    def test_health_check_without_token(self):
+    @patch("os.environ.get", return_value="")
+    def test_health_check_without_token(self, mocked):
         response = self.client.get('/health_check/', follow=True)
         self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        @patch("os.environ.get", return_value="personal_access_token_value_from_env")
+        @patch("requests.get", return_value=MockRequestsToGithubPopularRepo())
+        def test_health_check_connection_to_github_ok_token_ok(self, mocked_env, mocked_requests):
+            response = self.client.get('/health_check/', follow=True)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)

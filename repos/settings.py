@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
     'drf_yasg',
     'djoser',
     'popularity.apps.PopularityConfig'
@@ -108,8 +109,6 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema',
 }
-
-
 
 # Internationalization
 # https://docs.djangoproject.com/en/3.1/topics/i18n/

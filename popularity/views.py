@@ -1,5 +1,5 @@
 # Create your views here.
-from django.http import HttpResponse, HttpResponseServerError
+from django.http import HttpResponse
 from django.views import View
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -25,10 +25,9 @@ class RepoViewSet(viewsets.ModelViewSet):
     @action(detail=True)
     def popular(self, request, *args, **kwargs):
         """
-        Api to score popularity of saved github repo.
-        Repo is popular if 1 * num_stars + 2 * num_forks >= 500
-        Returns:  "popular" or "not popular"
-        Throws 503 Error if PERSONAL_ACCESS_TOKEN is not granted on server"""
+        GET endpoint for Api to score popularity of saved github repo.
+        Repo is popular if 1 * num_stars + 2 * num_forks >= 500.  Returns:  "popular" or "not popular"
+        """
         repo = self.get_object()
         _status, info = repo.popular_status
         return Response(info, _status)
@@ -47,8 +46,12 @@ class HealthCheckView(View):
 
     @staticmethod
     def get(request, *args, **kwargs):
+        """
+        Create a request to Github Rest Api to check if it is working.
+        Assumption test_repo = "facebook/react" is available on Github.
+        """
         test_repo = "facebook/react"
         _status, _ = get_github_api_response(test_repo)
         if _status == status.HTTP_200_OK:
             return HttpResponse("ok")
-        return HttpResponseServerError("Not ok")
+        return HttpResponse("Not ok", status=_status)

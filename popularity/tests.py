@@ -10,12 +10,15 @@ from popularity import views
 from popularity.models import Repo
 from popularity.utils import calculate_popularity, POPULAR_REPO_RESULT, NOT_POPULAR_REPO_RESULT
 
+WRONG_TOKEN_VALUE_GOOD_FORMAT = "657e8d9bae9a642fb24503ff2dffb70c5e904401"
+
 
 class MockRequestsToGithubPopularRepo:
     def __init__(self):
         self.status_code = 200
 
-    def json(self):
+    @staticmethod
+    def json():
         return {
             "stargazers_count": 500,
             "forks": 200
@@ -26,19 +29,26 @@ class MockRequestsToGithubNotPopularRepo:
     def __init__(self):
         self.status_code = 200
 
-    def json(self):
+    @staticmethod
+    def json():
         return {
             "stargazers_count": 499,
             "forks": 0
         }
 
 
+class MockRequestsToGithubNotExistingRepo:
+    def __init__(self):
+        self.status_code = 404
+        self.reason = "not existing"
+
+
 class SmokeTests(TestCase):
     """Test Repo models, urls smoke test"""
 
     def setUp(self):
-        self.repo1 = Repo.objects.create(name='repo1_name')
-        self.repo2 = Repo.objects.create(name='repo2_name')
+        self.repo1 = Repo.objects.create(name='user/repo1_name')
+        self.repo2 = Repo.objects.create(name='user2/repo2_name')
 
     def test_check_if_view_repos_have_good_class(self):
         found = resolve(reverse('repo-list'))
@@ -96,13 +106,16 @@ class SingleRepoTest(TestCase):
         self.assertIn('created', response_json)
         self.assertNotEquals(response_json.get('created'), '')
 
-    @patch("os.environ.get", return_value="")
-    def test_single_repo_popularity_token_not_granted(self, mocked):
-        """Test popularity when token not granted on server"""
-        repo_name = "test_user/test_name11"
-        response = self.client.post(reverse('repo-list'), data={"name": repo_name})
-        test_id = response.json()['id']
-        response = self.client.get(f'/api/v1/repos/{test_id}/popular/')
+    @patch("os.environ.get", return_value=WRONG_TOKEN_VALUE_GOOD_FORMAT)
+    def test_single_repo_popularity_wrong_token_value(self, mocked_env):
+        """Test popularity when token granted with not working value."""
+        response = self.call_github_rest_api_for_popularity()
+        self.assertEquals(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @patch("os.environ.get", return_value=None)
+    def test_single_repo_popularity_no_token(self, mocked_env):
+        """Test popularity when no token on server."""
+        response = self.call_github_rest_api_for_popularity()
         self.assertEquals(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
 
     @patch("os.environ.get", return_value="test_personal_access_token_in_env")
@@ -110,6 +123,7 @@ class SingleRepoTest(TestCase):
     def test_single_repo_popularity_valid_response_from_github_popular(self, mocked_env, mocked_requests):
         """Test popularity when token granted on server and github api responsible. Check popular repo."""
         response = self.call_github_rest_api_for_popularity()
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
         self.assertEquals(response.json(), 'popular')
 
     @patch("os.environ.get", return_value="test_personal_access_token_in_env")
@@ -117,6 +131,7 @@ class SingleRepoTest(TestCase):
     def test_single_repo_popularity_valid_response_from_github_not_popular(self, mocked_env, mocked_requests):
         """Test popularity when token granted on server and github api responsible. Check not popular repo."""
         response = self.call_github_rest_api_for_popularity()
+        self.assertEquals(response.status_code, status.HTTP_200_OK)
         self.assertEquals(response.json(), 'not popular')
 
     def call_github_rest_api_for_popularity(self):
@@ -124,7 +139,6 @@ class SingleRepoTest(TestCase):
         response = self.client.post(reverse('repo-list'), data={"name": repo_name})
         test_id = response.json()['id']
         response = self.client.get(f'/api/v1/repos/{test_id}/popular/')
-        self.assertEquals(response.status_code, status.HTTP_200_OK)
         return response
 
 
@@ -185,7 +199,8 @@ class AuthorizationSmokeTest(TestCase):
 
     def setUp(self):
         self.test_id = 3
-        self.repo3 = Repo.objects.create(name='repo3_name', id=self.test_id)
+        not_existing_repo_name = 'repo_user/repo_name'
+        self.repo3 = Repo.objects.create(name=not_existing_repo_name, id=self.test_id)
         self.user = User.objects.create_user('test', 'test@email.com', 'testtest')
         self.client.force_login(self.user)
 
@@ -197,9 +212,23 @@ class AuthorizationSmokeTest(TestCase):
         response = self.client.get(reverse('repo-detail', kwargs={'pk': self.test_id}), follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_single_repo_popular_status_available_url(self):
+    @patch("os.environ.get", return_value="proper_and_working_personal_access_token_value")
+    @patch("requests.get", return_value=MockRequestsToGithubNotExistingRepo())
+    def test_single_repo_nonexisting_in_github(self, mocked, mocked_requests):
         response = self.client.get(f'/api/v1/repos/{self.test_id}/popular/', follow=True)
-        self.assertNotEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("os.environ.get", return_value="proper_and_working_personal_access_token_value")
+    @patch("requests.get", return_value=MockRequestsToGithubNotExistingRepo())
+    def test_single_repo_popular_nonexisting_in_github(self, mocked, mocked_requests):
+        response = self.client.get(f'/api/v1/repos/{self.test_id}/popular/', follow=True)
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("os.environ.get", return_value="proper_and_working_personal_access_token_value")
+    @patch("requests.get", return_value=MockRequestsToGithubPopularRepo())
+    def test_single_repo_popular_existing_in_github(self, mocked, mocked_requests):
+        response = self.client.get(f'/api/v1/repos/{self.test_id}/popular/', follow=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
 class DocumentationTest(TestCase):
@@ -247,13 +276,23 @@ class HealthCheckTest(TestCase):
         found = resolve('/health_check/')
         self.assertEquals(found.func.view_class, views.HealthCheckView)
 
-    @patch("os.environ.get", return_value="")
+    @patch("os.environ.get", return_value=None)
     def test_health_check_without_token(self, mocked):
+        response = self.client.get('/health_check/', follow=True)
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    @patch("os.environ.get", return_value="proper_and_working_personal_access_token_value")
+    @patch("requests.get", return_value=MockRequestsToGithubPopularRepo())
+    def test_health_check_connection_to_github_ok_token_ok(self, mocked_env, mocked_requests):
+        response = self.client.get('/health_check/', follow=True)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @patch("os.environ.get", return_value="wrong_format_value")
+    def test_health_check_connection_to_github_ok_token_format_wrong(self, mocked_env):
         response = self.client.get('/health_check/', follow=True)
         self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        @patch("os.environ.get", return_value="personal_access_token_value_from_env")
-        @patch("requests.get", return_value=MockRequestsToGithubPopularRepo())
-        def test_health_check_connection_to_github_ok_token_ok(self, mocked_env, mocked_requests):
-            response = self.client.get('/health_check/', follow=True)
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
+    @patch("os.environ.get", return_value=WRONG_TOKEN_VALUE_GOOD_FORMAT)
+    def test_health_check_connection_to_github_token_value_wrong(self, mocked_env):
+        response = self.client.get('/health_check/', follow=True)
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)

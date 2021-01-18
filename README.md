@@ -1,18 +1,17 @@
 # Project Summary
-Popularity API for getting the popularity of github repo.
-Popular GitHub repository means one with many forks and stars.
-To use Github Rest Api the Github Personal Access Token is needed.
++ Popularity API for getting the popularity of github repo.
++ Popular GitHub repository means the one with many forks and stars.
++ To use Github Rest Api the Github Personal Access Token is needed.
 
 # Project Assumptions
-+ App is using PERSONAL_ACCESS_TOKEN from github.
-+ PERSONAL_ACCESS_TOKEN is valid and working . Be sure it is available in env in env where the app is running.
-+ Rest Github Api GitHub's official REST API https://docs.github.com/en/rest is not changed
-+ Service is only for authenticated users. There is TokenAuthentication and SessionAuthentication
-+ Speed of obtaining responses from Github Api is changing during day. It is about 0.5s - 1s.
-+ Maximum amount of api hits for github api  is 5000/h for 1 token. Service would not work after the limit is reached.
-+ Requests library with PERSONAL_ACCESS_TOKEN in Header is used for communicating with Github.
++ App is using PERSONAL_ACCESS_TOKEN available for github users.
++ PERSONAL_ACCESS_TOKEN is valid and working. Be sure it is available in env where the app is running.
++ Project is based on Rest Github Api/ GitHub's official REST API https://docs.github.com/en/rest .
++ Service is only for authenticated users. There is TokenAuthentication and SessionAuthentication.
++ Speed of service depends on speed of Github Api. It is changing during day. It is about 0.5s - 1s.
++ Maximum amount of Github Api requests  is 5000/hour for 1 token. Service would not work after the limit is reached.
 + The api is communicating live with Github Api. No caching for common calls.
-+ Name of Saved github repo should be in github format to identify  github_user/repo_name e.g. facebook/react
++ Name of saved github repo should be in Github format to easy identify it: github_user/repo_name e.g. facebook/react
 
 # Project Technologies
 + Python 3.7
@@ -24,19 +23,15 @@ To use Github Rest Api the Github Personal Access Token is needed.
 + Docker Compose
 + Requests
 
-   1. build the service
-      1. run automatic tests
-      1. run the service locally
-
 # How to use Service
 
 ## 1. build the service locally
 
-+ used Python 3.7
++ use Python 3.7
 + pip install -r requirements.txt
 + python manage.py makemigrations
 + python manage.py migrate
-+ export PERSONAL_ACCESS_TOKEN=<your token>
++ export PERSONAL_ACCESS_TOKEN="<personal access token>"
 + python manage.py runserver 8000
 + python manage.py createsuperuser
 + login in /admin
@@ -78,19 +73,19 @@ To use Github Rest Api the Github Personal Access Token is needed.
 ##### Register a new user:
 + $ curl -X POST http://127.0.0.1:8000/auth/users/ --data 'username=djoser&password=alpine12'
 {"email": "", "username": "djoser", "id":1}
-##### Create token
+##### Create authtoken for user
 + python manage.py drf_create_token djoser
-+ >>>>>>>Generated token 62c20951d9f30234719a6a3e117ece3b4ff57df6 for user djoser
++ ```Generated token 62c20951d9f30234719a6a3e117ece3b4ff57df6 for user djoser```
 {"auth_token": "e80988aed847782fcca766cfdd220ea82fae0649"}
 + #for docker: docker-compose run web python manage.py drf_create_token djoser
 
-##### Use token auth for Api:
+##### Use authtoken for Api usage:
 + $ curl -LX GET http://127.0.0.1:8000/api/v1/repos/ -H 'Authorization: Token b704c9fc3655635646356ac2950269f352ea1139'
 curl -LX GET http://127.0.0.1:8000/api/v1/repos/ -H 'Authorization: Token e80988aed847782fcca766cfdd220ea82fae0649'
 
 #### Use swagger to traverse UI:
-+ login in /admin as earlier prepared user
 + navigate to /doc/
++ login as earlier prepared user
 + use the swagger UI to play with api.
 
 #### Simple usage of popularity Api:
